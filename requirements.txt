@@ -1,5 +1,4 @@
-flask3.0.3
-gunicorn22.0.0
-requests2.32.3
-gevent24.2.1
-
+flask==3.0.3
+requests==2.32.3
+gunicorn==22.0.0
+gevent==23.9.1

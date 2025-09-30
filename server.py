@@ -59,128 +59,79 @@ def b44_put(entity: str, entity_id: str, payload: dict):
 
 # --- Tools definitions (MCP) ---
 TOOLS = [
-    # === Client ===
     {
         "name": "consultarClientes",
-        "description": "Lista clientes com filtros opcionais (name, company, email, phone, address, segment, tipo_estabelecimento, status, assigned_to, classification, notes, observacoes_perfil, created_date, last_contact, permitted_product_ids).",
+        "description": "Lista clientes com filtros opcionais.",
         "inputSchema": {"type": "object", "properties": {k: {"type": "string"} for k in FILTERS["Client"]}}
     },
     {
         "name": "atualizarCliente",
-        "description": "Atualiza um cliente (ex.: status, phone, notes etc.).",
+        "description": "Atualiza um cliente.",
         "inputSchema": {
             "type": "object",
             "properties": {"id": {"type": "string"}, "dados": {"type": "object"}},
             "required": ["id", "dados"]
         }
     },
-
-    # === Interaction ===
     {
         "name": "consultarInteracoes",
-        "description": "Lista interações com filtros opcionais (client_id, date, type, description, outcome, next_steps, follow_up_date, client_name).",
+        "description": "Lista interações.",
         "inputSchema": {"type": "object", "properties": {k: {"type": "string"} for k in FILTERS["Interaction"]}}
     },
     {
         "name": "atualizarInteracao",
-        "description": "Atualiza uma interação (ex.: outcome, next_steps, follow_up_date...).",
+        "description": "Atualiza uma interação.",
         "inputSchema": {
             "type": "object",
             "properties": {"id": {"type": "string"}, "dados": {"type": "object"}},
             "required": ["id", "dados"]
         }
     },
-
-    # === Task ===
     {
         "name": "consultarTarefas",
-        "description": "Lista tarefas com filtros opcionais (title, description, due_date, priority, status, client_id, client_name, assigned_to).",
+        "description": "Lista tarefas.",
         "inputSchema": {"type": "object", "properties": {k: {"type": "string"} for k in FILTERS["Task"]}}
     },
     {
         "name": "atualizarTarefa",
-        "description": "Atualiza uma tarefa (ex.: status, due_date, priority...).",
+        "description": "Atualiza uma tarefa.",
         "inputSchema": {
             "type": "object",
             "properties": {"id": {"type": "string"}, "dados": {"type": "object"}},
             "required": ["id", "dados"]
         }
     },
-
-    # === Visit ===
     {
         "name": "consultarVisitas",
-        "description": "Lista visitas com filtros opcionais (title, type, client_id, client_name, description, start_date, end_date, status, location, notes, assigned_to, post_visit_report, llm_processed_report, attachments, participants, priority).",
+        "description": "Lista visitas.",
         "inputSchema": {"type": "object", "properties": {k: {"type": "string"} for k in FILTERS["Visit"]}}
     },
     {
         "name": "atualizarVisita",
-        "description": "Atualiza uma visita (ex.: status, location, notes, post_visit_report...).",
+        "description": "Atualiza uma visita.",
         "inputSchema": {
             "type": "object",
             "properties": {"id": {"type": "string"}, "dados": {"type": "object"}},
             "required": ["id", "dados"]
         }
     },
-
-    # === Contatos de Loja (se existir no app) ===
     {
         "name": "consultarContatosLoja",
-        "description": "Lista contatos de loja com filtros opcionais (client_id, name, phone, email, role, notes).",
+        "description": "Lista contatos de loja.",
         "inputSchema": {"type": "object", "properties": {k: {"type": "string"} for k in FILTERS.get("ContatoLoja", [])}}
     }
 ]
 
 # --- Tools impl ---
-def tool_consultar_clientes(arguments: dict):
-    return b44_get("Client", build_params("Client", arguments))
-
-def tool_atualizar_cliente(arguments: dict):
-    entity_id = arguments.get("id")
-    dados = arguments.get("dados") or {}
-    if not entity_id:
-        raise ValueError("Parâmetro 'id' é obrigatório")
-    return b44_put("Client", entity_id, dados)
-
-def tool_consultar_interacoes(arguments: dict):
-    return b44_get("Interaction", build_params("Interaction", arguments))
-
-def tool_atualizar_interacao(arguments: dict):
-    entity_id = arguments.get("id")
-    dados = arguments.get("dados") or {}
-    if not entity_id:
-        raise ValueError("Parâmetro 'id' é obrigatório")
-    return b44_put("Interaction", entity_id, dados)
-
-def tool_consultar_tarefas(arguments: dict):
-    params = build_params("Task", arguments)
-    try:
-        return b44_get("Task", params)
-    except requests.HTTPError as e:
-        # fallback caso Task não exista ainda: usa Interaction
-        if e.response is not None and e.response.status_code == 404:
-            return b44_get("Interaction", build_params("Interaction", arguments))
-        raise
-
-def tool_atualizar_tarefa(arguments: dict):
-    entity_id = arguments.get("id")
-    dados = arguments.get("dados") or {}
-    if not entity_id:
-        raise ValueError("Parâmetro 'id' é obrigatório")
-    return b44_put("Task", entity_id, dados)
-
-def tool_consultar_visitas(arguments: dict):
-    return b44_get("Visit", build_params("Visit", arguments))
-
-def tool_atualizar_visita(arguments: dict):
-    entity_id = arguments.get("id")
-    dados = arguments.get("dados") or {}
-    if not entity_id:
-        raise ValueError("Parâmetro 'id' é obrigatório")
-    return b44_put("Visit", entity_id, dados)
-
-def tool_consultar_contatos_loja(arguments: dict):
-    return b44_get("ContatoLoja", build_params("ContatoLoja", arguments))
+def tool_consultar_clientes(arguments: dict): return b44_get("Client", build_params("Client", arguments))
+def tool_atualizar_cliente(arguments: dict): return b44_put("Client", arguments["id"], arguments["dados"])
+def tool_consultar_interacoes(arguments: dict): return b44_get("Interaction", build_params("Interaction", arguments))
+def tool_atualizar_interacao(arguments: dict): return b44_put("Interaction", arguments["id"], arguments["dados"])
+def tool_consultar_tarefas(arguments: dict): return b44_get("Task", build_params("Task", arguments))
+def tool_atualizar_tarefa(arguments: dict): return b44_put("Task", arguments["id"], arguments["dados"])
+def tool_consultar_visitas(arguments: dict): return b44_get("Visit", build_params("Visit", arguments))
+def tool_atualizar_visita(arguments: dict): return b44_put("Visit", arguments["id"], arguments["dados"])
+def tool_consultar_contatos_loja(arguments: dict): return b44_get("ContatoLoja", build_params("ContatoLoja", arguments))
 
 TOOL_IMPL = {
     "consultarClientes": tool_consultar_clientes,
@@ -195,17 +146,15 @@ TOOL_IMPL = {
 }
 
 # === ENDPOINTS MCP ===
-@app.post("/sse")
+@app.route("/sse", methods=["GET", "POST"])
 def sse():
     def generate():
         proto = request.headers.get("X-Forwarded-Proto", request.scheme)
         host = request.headers.get("X-Forwarded-Host", request.host)
         base = f"{proto}://{host}"
         message_url = f"{base}/messages"
-
         yield "event: endpoint\n"
         yield f"data: {json.dumps({'type':'endpoint','message_url':message_url})}\n\n"
-
         yield "event: message\n"
         yield f"data: {json.dumps({'type':'server_info','tools':TOOLS})}\n\n"
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
@@ -216,28 +165,19 @@ def messages():
     req_id = payload.get("id")
     method = payload.get("method")
     params = payload.get("params") or {}
-
     try:
         if method == "tools/list":
             return jsonify({"id": req_id, "result": {"tools": TOOLS}})
-
         if method == "tools/call":
             name = params.get("name")
             arguments = params.get("arguments") or {}
-            if name not in TOOL_IMPL:
-                return jsonify({"id": req_id, "error": {"code": 404, "message": f"tool '{name}' not found"}}), 404
             result = TOOL_IMPL[name](arguments)
             return jsonify({"id": req_id, "result": {"content": result}})
-
         if method in ("ping", "health"):
             return jsonify({"id": req_id, "result": "ok"})
-
         return jsonify({"id": req_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}}), 400
-
     except Exception as e:
-        status = 500
-        msg = str(e)
-        return jsonify({"id": req_id, "error": {"code": status, "message": msg}}), status
+        return jsonify({"id": req_id, "error": {"code": 500, "message": str(e)}}), 500
 
 @app.get("/")
 def index():

@@ -9,11 +9,8 @@ app = Flask(__name__)
 # ========= CONFIG =========
 API_KEY = os.getenv("API_KEY")
 if not API_KEY:
-    raise RuntimeError(
-        "Defina a variável de ambiente API_KEY com a chave da Base44 (valor puro, sem aspas/linhas extras)"
-    )
+    raise RuntimeError("Defina a variável de ambiente API_KEY com a chave da Base44 (somente o valor, sem código JS!)")
 
-# ID da sua app na Base44 permanece o mesmo
 BASE_URL = "https://app.base44.com/api/apps/680d6ca95153f09fa29b4f1a/entities"
 
 COMMON_HEADERS = {
@@ -167,31 +164,24 @@ def sse():
             base  = f"{proto}://{host}"
             message_url = f"{base}/messages"
 
-            # sugere reconexão em 15s se o cliente cair
             yield "retry: 15000\n\n"
 
-            # envia endpoint do canal RPC
             yield "event: endpoint\n"
             yield f"data: {json.dumps({'type':'endpoint','message_url':message_url})}\n\n"
 
-            # envia a lista de tools (server_info)
             yield "event: message\n"
             yield f"data: {json.dumps({'type':'server_info','tools':TOOLS})}\n\n"
 
-            # mantém a conexão aberta com keep-alive
             while True:
-                # comentário SSE é ignorado pelo cliente, mas mantém o stream vivo
                 yield ": keep-alive\n\n"
                 print("💓 keep-alive /sse")
                 time.sleep(15)
         except GeneratorExit:
-            # cliente fechou a conexão
             print("👋 Cliente encerrou conexão /sse")
         except Exception as e:
             print("❌ Erro no gerador /sse:", str(e))
 
     resp = Response(stream_with_context(generate()), mimetype="text/event-stream")
-    # cabeçalhos que ajudam proxies a não bufferizar
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["X-Accel-Buffering"] = "no"
     return resp
@@ -204,11 +194,16 @@ def messages():
     params  = payload.get("params") or {}
 
     try:
-        # 1) Listagem de ferramentas
         if method == "tools/list":
-            return jsonify({"id": req_id, "result": {"tools": TOOLS}})
+            return jsonify({
+                "id": req_id,
+                "result": {
+                    "content": [
+                        {"type": "json", "data": {"tools": TOOLS}}
+                    ]
+                }
+            })
 
-        # 2) Chamada de ferramenta
         if method == "tools/call":
             name = params.get("name")
             arguments = params.get("arguments") or {}
@@ -220,8 +215,6 @@ def messages():
                 }), 400
 
             result = TOOL_IMPL[name](arguments)
-
-            # Formato oficial MCP: content como array, cada item com type+data
             return jsonify({
                 "id": req_id,
                 "result": {
@@ -231,11 +224,9 @@ def messages():
                 }
             })
 
-        # 3) Ping / Health
         if method in ("ping", "health"):
             return jsonify({"id": req_id, "result": "ok"})
 
-        # 4) Método inválido
         return jsonify({
             "id": req_id,
             "error": {"code": -32601, "message": f"Method '{method}' não suportado"}

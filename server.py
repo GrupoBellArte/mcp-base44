@@ -47,7 +47,7 @@ def b44_get(entity: str, params=None):
     url = f"{BASE_URL}/{entity}"
     r = requests.get(url, headers=COMMON_HEADERS, params=params or {})
     if r.status_code != 200:
-        print("⚠️ Erro GET:", url, r.status_code, r.text)  # LOG detalhado
+        print("⚠️ Erro GET:", url, r.status_code, r.text)
     r.raise_for_status()
     return r.json()
 
@@ -55,7 +55,7 @@ def b44_put(entity: str, entity_id: str, payload: dict):
     url = f"{BASE_URL}/{entity}/{entity_id}"
     r = requests.put(url, headers=COMMON_HEADERS, json=payload or {})
     if r.status_code not in (200, 201):
-        print("⚠️ Erro PUT:", url, r.status_code, r.text)  # LOG detalhado
+        print("⚠️ Erro PUT:", url, r.status_code, r.text)
     r.raise_for_status()
     return r.json()
 
@@ -98,16 +98,25 @@ TOOL_IMPL = {
 # === ENDPOINTS MCP ===
 @app.route("/sse", methods=["GET", "POST"])
 def sse():
-    def generate():
-        proto = request.headers.get("X-Forwarded-Proto", request.scheme)
-        host = request.headers.get("X-Forwarded-Host", request.host)
-        base = f"{proto}://{host}"
-        message_url = f"{base}/messages"
-        yield "event: endpoint\n"
-        yield f"data: {json.dumps({'type':'endpoint','message_url':message_url})}\n\n"
-        yield "event: message\n"
-        yield f"data: {json.dumps({'type':'server_info','tools':TOOLS})}\n\n"
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+    try:
+        print("🔌 Nova conexão recebida em /sse")
+        def generate():
+            proto = request.headers.get("X-Forwarded-Proto", request.scheme)
+            host = request.headers.get("X-Forwarded-Host", request.host)
+            base = f"{proto}://{host}"
+            message_url = f"{base}/messages"
+
+            print("📡 Enviando endpoint e tools para o cliente MCP...")
+            yield "event: endpoint\n"
+            yield f"data: {json.dumps({'type':'endpoint','message_url':message_url})}\n\n"
+
+            yield "event: message\n"
+            yield f"data: {json.dumps({'type':'server_info','tools':TOOLS})}\n\n"
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+    except Exception as e:
+        print("❌ Erro no /sse:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 @app.post("/messages")
 def messages():
@@ -121,14 +130,15 @@ def messages():
         if method == "tools/call":
             name = params.get("name")
             arguments = params.get("arguments") or {}
+            if name not in TOOL_IMPL:
+                raise ValueError(f"Tool {name} não encontrada")
             result = TOOL_IMPL[name](arguments)
             return jsonify({"id": req_id, "result": {"content": result}})
         if method in ("ping", "health"):
             return jsonify({"id": req_id, "result": "ok"})
         return jsonify({"id": req_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}}), 400
     except Exception as e:
-        # LOG detalhado do erro no Render
-        print("⚠️ Erro interno:", str(e))
+        print("❌ Erro interno:", str(e))
         return jsonify({"id": req_id, "error": {"code": 500, "message": str(e)}}), 500
 
 @app.get("/")

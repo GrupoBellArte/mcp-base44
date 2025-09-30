@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from flask import Flask, request, jsonify, Response, stream_with_context
 import requests
 
@@ -8,9 +9,11 @@ app = Flask(__name__)
 # ========= CONFIG =========
 API_KEY = os.getenv("API_KEY")
 if not API_KEY:
-    raise RuntimeError("Defina a variável de ambiente API_KEY com a chave da Base44 (valor puro, sem aspas/linhas extras)")
+    raise RuntimeError(
+        "Defina a variável de ambiente API_KEY com a chave da Base44 (valor puro, sem aspas/linhas extras)"
+    )
 
-# Base da sua app no Base44
+# ID da sua app na Base44 permanece o mesmo
 BASE_URL = "https://app.base44.com/api/apps/680d6ca95153f09fa29b4f1a/entities"
 
 COMMON_HEADERS = {
@@ -154,26 +157,44 @@ TOOL_IMPL = {
 }
 
 # ========= ENDPOINTS MCP =========
-@app.route("/sse", methods=["GET","POST"])
+@app.route("/sse", methods=["GET", "POST"])
 def sse():
-    try:
-        print("🔌 Nova conexão recebida em /sse")
-        def generate():
+    print("🔌 Nova conexão recebida em /sse")
+    def generate():
+        try:
             proto = request.headers.get("X-Forwarded-Proto", request.scheme)
             host  = request.headers.get("X-Forwarded-Host",  request.host)
             base  = f"{proto}://{host}"
             message_url = f"{base}/messages"
 
-            print("📡 Enviando endpoint e tools para o cliente MCP...")
+            # sugere reconexão em 15s se o cliente cair
+            yield "retry: 15000\n\n"
+
+            # envia endpoint do canal RPC
             yield "event: endpoint\n"
             yield f"data: {json.dumps({'type':'endpoint','message_url':message_url})}\n\n"
 
+            # envia a lista de tools (server_info)
             yield "event: message\n"
             yield f"data: {json.dumps({'type':'server_info','tools':TOOLS})}\n\n"
-        return Response(stream_with_context(generate()), mimetype="text/event-stream")
-    except Exception as e:
-        print("❌ Erro no /sse:", str(e))
-        return jsonify({"error": str(e)}), 500
+
+            # mantém a conexão aberta com keep-alive
+            while True:
+                # comentário SSE é ignorado pelo cliente, mas mantém o stream vivo
+                yield ": keep-alive\n\n"
+                print("💓 keep-alive /sse")
+                time.sleep(15)
+        except GeneratorExit:
+            # cliente fechou a conexão
+            print("👋 Cliente encerrou conexão /sse")
+        except Exception as e:
+            print("❌ Erro no gerador /sse:", str(e))
+
+    resp = Response(stream_with_context(generate()), mimetype="text/event-stream")
+    # cabeçalhos que ajudam proxies a não bufferizar
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["X-Accel-Buffering"] = "no"
+    return resp
 
 @app.post("/messages")
 def messages():
@@ -185,12 +206,7 @@ def messages():
     try:
         # 1) Listagem de ferramentas
         if method == "tools/list":
-            return jsonify({
-                "id": req_id,
-                "result": {
-                    "tools": TOOLS
-                }
-            })
+            return jsonify({"id": req_id, "result": {"tools": TOOLS}})
 
         # 2) Chamada de ferramenta
         if method == "tools/call":
@@ -200,22 +216,17 @@ def messages():
             if name not in TOOL_IMPL:
                 return jsonify({
                     "id": req_id,
-                    "error": {
-                        "code": -32601,
-                        "message": f"Tool '{name}' não encontrada"
-                    }
+                    "error": {"code": -32601, "message": f"Tool '{name}' não encontrada"}
                 }), 400
 
             result = TOOL_IMPL[name](arguments)
 
+            # Formato oficial MCP: content como array, cada item com type+data
             return jsonify({
                 "id": req_id,
                 "result": {
                     "content": [
-                        {
-                            "type": "json",
-                            "data": result
-                        }
+                        {"type": "json", "data": result}
                     ]
                 }
             })
@@ -224,29 +235,23 @@ def messages():
         if method in ("ping", "health"):
             return jsonify({"id": req_id, "result": "ok"})
 
-        # 4) Método desconhecido
+        # 4) Método inválido
         return jsonify({
             "id": req_id,
-            "error": {
-                "code": -32601,
-                "message": f"Method '{method}' não suportado"
-            }
+            "error": {"code": -32601, "message": f"Method '{method}' não suportado"}
         }), 400
 
     except Exception as e:
         print("❌ Erro interno em /messages:", str(e))
         return jsonify({
             "id": req_id,
-            "error": {
-                "code": 500,
-                "message": str(e)
-            }
+            "error": {"code": 500, "message": str(e)}
         }), 500
 
 @app.get("/")
 def index():
     return "MCP server do CRM Base44 está no ar. Use /sse e /messages."
-    
+
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "3000"))
     app.run(host="0.0.0.0", port=port)

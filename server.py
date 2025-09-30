@@ -10,7 +10,7 @@ API_KEY = os.getenv("API_KEY")
 if not API_KEY:
     raise RuntimeError("Defina a variável de ambiente API_KEY com a chave da Base44 (valor puro, sem aspas/linhas extras)")
 
-# Base da sua app (não mude o ID da app)
+# Base da sua app no Base44
 BASE_URL = "https://app.base44.com/api/apps/680d6ca95153f09fa29b4f1a/entities"
 
 COMMON_HEADERS = {
@@ -48,7 +48,7 @@ def build_params(entity: str, arguments: dict):
         if k in allowed and v not in (None, "")
     }
 
-# ========= HELPERS (com LOG de erro detalhado) =========
+# ========= HELPERS =========
 def b44_get(entity: str, params=None):
     url = f"{BASE_URL}/{entity}"
     r = requests.get(url, headers=COMMON_HEADERS, params=params or {})
@@ -183,38 +183,65 @@ def messages():
     params  = payload.get("params") or {}
 
     try:
-        # 1) Listagem de tools
+        # 1) Listagem de ferramentas
         if method == "tools/list":
-            return jsonify({"id": req_id, "result": {"tools": TOOLS}})
+            return jsonify({
+                "id": req_id,
+                "result": {
+                    "tools": TOOLS
+                }
+            })
 
-        # 2) Chamada de uma tool
+        # 2) Chamada de ferramenta
         if method == "tools/call":
             name = params.get("name")
             arguments = params.get("arguments") or {}
-            if name not in TOOL_IMPL:
-                return jsonify({"id": req_id, "error": {"code": -32601, "message": f"Tool '{name}' não encontrada"}}), 400
 
-            result = TOOL_IMPL[name](arguments)  # pode ser list/dict
-            # Formato compatível com MCP (content como JSON)
+            if name not in TOOL_IMPL:
+                return jsonify({
+                    "id": req_id,
+                    "error": {
+                        "code": -32601,
+                        "message": f"Tool '{name}' não encontrada"
+                    }
+                }), 400
+
+            result = TOOL_IMPL[name](arguments)
+
             return jsonify({
                 "id": req_id,
                 "result": {
                     "content": [
-                        {"type": "json", "data": result}
+                        {
+                            "type": "json",
+                            "data": result
+                        }
                     ]
                 }
             })
 
-        # 3) Ping / health
+        # 3) Ping / Health
         if method in ("ping", "health"):
             return jsonify({"id": req_id, "result": "ok"})
 
-        # 4) Método inválido
-        return jsonify({"id": req_id, "error": {"code": -32601, "message": f"Method '{method}' não suportado"}}), 400
+        # 4) Método desconhecido
+        return jsonify({
+            "id": req_id,
+            "error": {
+                "code": -32601,
+                "message": f"Method '{method}' não suportado"
+            }
+        }), 400
 
     except Exception as e:
-        print("❌ Erro interno:", str(e))
-        return jsonify({"id": req_id, "error": {"code": 500, "message": str(e)}}), 500
+        print("❌ Erro interno em /messages:", str(e))
+        return jsonify({
+            "id": req_id,
+            "error": {
+                "code": 500,
+                "message": str(e)
+            }
+        }), 500
 
 @app.get("/")
 def index():

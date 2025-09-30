@@ -157,6 +157,7 @@ TOOL_IMPL = {
 @app.route("/sse", methods=["GET", "POST"])
 def sse():
     print("🔌 Nova conexão recebida em /sse")
+
     def generate():
         try:
             proto = request.headers.get("X-Forwarded-Proto", request.scheme)
@@ -175,7 +176,7 @@ def sse():
             while True:
                 yield ": keep-alive\n\n"
                 print("💓 keep-alive /sse")
-                time.sleep(15)
+                time.sleep(5)  # intervalo mais curto, não bloqueia tanto
         except GeneratorExit:
             print("👋 Cliente encerrou conexão /sse")
         except Exception as e:

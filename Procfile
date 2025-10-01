@@ -1,2 +1,1 @@
-Running 'gunicorn server:app'
-Using worker: sync
+web: gunicorn -k gevent -w 1 server:app
